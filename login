@@ -23,7 +23,7 @@ read -s -p "Password: " password
 echo "Getting client token..."
 client_token=$(dd if=/dev/urandom count=1 | base64 | cut -c1-128)
 
-curl -s -X POST -H "Content-Type: application/json" "$SERVER_ENDPOINT/authserver/authenticate" -d "{\"username\": \"$username\", \"password\": \"$password\", \"requestUser\": true, \"clientToken\": \"$client_token\"}" > authlib-token.json
+curl -s -X POST -H "Content-Type: application/json" "$SERVER_ENDPOINT/authserver/authenticate" -d "{\"username\": \"$username\", \"password\": \"$password\", \"requestUser\": true, \"agent\": {\"name\": \"Minecraft\", \"version\": 1}, \"clientToken\": \"$client_token\"}" > authlib-token.json
 access_token=$(cat authlib-token.json | jq -r ".accessToken")
 if [ -z "$access_token" ]; then
     echo "Failed to get access token."
