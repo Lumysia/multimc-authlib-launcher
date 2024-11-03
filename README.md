@@ -27,6 +27,8 @@ cd ~/.multimc-authlib-launcher
 chmod +x login launch-minecraft
 ```
 
+download authlib-injector from https://github.com/yushijinhun/authlib-injector
+
 以下所有说明假设您将 Multimc Authlib Launcher 安装到 `~/.multimc-authlib-launcher`。如果您安装到其他位置，请自行替换。
 
 ## 登录
