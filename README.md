@@ -1,5 +1,7 @@
 # Multimc Authlib Launcher - 基于 Bash 的 MultiMC x Authlib Injector 登录器
 
+- This fork ONLY TESTED on macOS
+
 MultiMC / Prism Launcher 本身不支持 Authlib Injector 登录，并且官方表示永远不会实现。因此自己写了一个 Shell 来实现这个功能。
 
 仅限 Linux / macOS 使用。
