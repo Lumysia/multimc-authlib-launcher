@@ -1,35 +1,118 @@
 #!/bin/bash
+
+# Script purpose: Handles Minecraft authentication and launch process
+
+#===============================
+# Environment Setup
+#===============================
+
+# Add required paths
 PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
 
+# Determine the correct sed command based on OS
 if [ $(uname) = "Darwin" ]; then
+    # Use gsed for MacOS
     sed="gsed"
 else
+    # Use standard sed for other systems
     sed="sed"
 fi
 
-script_root="$(dirname $0)"
+# Get script directory and load authentication env
+script_root="$(cd "$(dirname "$0")" && pwd)"
 . "$script_root/authlib.env"
 shift
 
-echo -n "" > "$script_root/last-launch.stdin"
+#===============================
+# Read Launch Input
+#===============================
+
+# Clear previous launch input file
+launch_input_file="$script_root/last-launch.stdin"
+echo -n "" > "$launch_input_file"
+
+# Read input until "launch" command is received
 while true; do
-    read buffer
-    echo "$buffer" >> "$script_root/last-launch.stdin"
+    read buffer || break
+    echo "$buffer" >> "$launch_input_file"
     if [ "$buffer" = "launch" ]; then
         break
     fi
 done
 
-username=$(cat "$script_root/authlib-token.json"     | jq -r ".selectedProfile.name")
-userid=$(cat "$script_root/authlib-token.json"       | jq -r ".selectedProfile.id")
-access_token=$(cat "$script_root/authlib-token.json" | jq -r ".accessToken")
+#===============================
+# Parse Authentication Data
+#===============================
 
-$sed -i "/param --username/{n; s/.*/param $username/}"            "$script_root/last-launch.stdin"
-$sed -i "/param --uuid/{n; s/.*/param $userid/}"                  "$script_root/last-launch.stdin"
-$sed -i "/param --accessToken/{n; s/.*/param $access_token/}"     "$script_root/last-launch.stdin"
-$sed -i "/param --userType/{n; s/.*/param msa/}"                  "$script_root/last-launch.stdin"
-$sed -i "s/^userName .*$/userName $username/"                     "$script_root/last-launch.stdin"
-$sed -i "s/^sessionId .*$/sessionId token:$access_token/"         "$script_root/last-launch.stdin"
+# Extract user information from auth token
+auth_token_file="$script_root/authlib-token.json"
 
-echo $INST_JAVA -javaagent:"$script_root/authlib-injector.jar"=$SERVER_ADDRESS -Dauthlibinjector.yggdrasil.prefetched=$PREFETCH_DATA "$@"
-cat "$script_root/last-launch.stdin" |  $INST_JAVA -javaagent:"$script_root/authlib-injector.jar"=$SERVER_ADDRESS -Dauthlibinjector.yggdrasil.prefetched=$PREFETCH_DATA "$@"
+# Check if auth token file exists and is not empty
+if [ -s "$auth_token_file" ]; then
+    username=$(jq -r ".selectedProfile.name // \"player\"" "$auth_token_file")
+    userid=$(jq -r ".selectedProfile.id // \"$(uuidgen)\"" "$auth_token_file")
+    access_token=$(jq -r ".accessToken // \"0\"" "$auth_token_file")
+    user_type="msa"
+else
+    echo auth token file failed.
+    exit 2
+fi
+
+#===============================
+# Update Launch Parameters
+#===============================
+
+# Update authentication parameters in launch input
+$sed -i "/param --username/{n; s/.*/param $username/}"            $launch_input_file
+$sed -i "/param --uuid/{n; s/.*/param $userid/}"                  $launch_input_file
+$sed -i "/param --accessToken/{n; s/.*/param $access_token/}"     $launch_input_file
+$sed -i "/param --userType/{n; s/.*/param msa/}"                  $launch_input_file
+$sed -i "s/^userName .*$/userName $username/"                     $launch_input_file
+$sed -i "s/^sessionId .*$/sessionId token:$access_token/"         $launch_input_file
+
+#===============================
+# Java Path Selection
+#===============================
+
+# Function to determine Java path
+get_java_path() {
+    if [ -n "$JAVA_PATH" ] && [ -x "$JAVA_PATH" ]; then
+        echo "$JAVA_PATH"
+    elif [ -n "$INST_JAVA" ] && [ -x "$INST_JAVA" ]; then
+        echo "$INST_JAVA"
+    else
+        echo "Error: Neither JAVA_PATH nor INST_JAVA is available or executable"
+        exit 1
+    fi
+}
+
+# Get the appropriate Java path
+FINAL_JAVA_PATH=$(get_java_path)
+
+#===============================
+# Launch Game
+#===============================
+
+# Check if authlib-injector exists
+AUTHLIB_JAR="$script_root/$AUTHLIB_INJECTOR_NAME"
+if [ ! -f "$AUTHLIB_JAR" ]; then
+    echo "Error: $AUTHLIB_INJECTOR_NAME not found in $script_root"
+    exit 1
+fi
+
+# Prepare Java command with authlib injector
+JAVA_ARGS=()
+JAVA_ARGS+=("$FINAL_JAVA_PATH")
+JAVA_ARGS+=("-javaagent:$AUTHLIB_JAR=$SERVER_ADDRESS")
+JAVA_ARGS+=("-Dauthlibinjector.yggdrasil.prefetched=$PREFETCH_DATA")
+
+# Add remaining arguments
+for arg in "$@"; do
+    JAVA_ARGS+=("$arg")
+done
+
+# DEBUG
+echo "java args: ${JAVA_ARGS[@]}"
+
+# Execute the game with the prepared parameters
+cat "$launch_input_file" | "${JAVA_ARGS[@]}"
